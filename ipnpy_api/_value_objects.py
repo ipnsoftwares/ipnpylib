@@ -1,21 +1,33 @@
 class NodeConnection:
-    def __init__(self, version, node_key, end_point, connected_since) -> None:
-        self.__connected_since = connected_since
+    def __init__(self, version, end_point, connected_since, io_data, session_id, enabeld_services) -> None:
+        self.connected_since = connected_since
         self.__version = version
-        self.__node_key = node_key
-        self.__ep = end_point
+        self.__io_data = io_data
+        self.enabeld_services = enabeld_services
+        self.ep_address = end_point['addr']
+        self.ep_type = end_point['type']
+        self.session_id = session_id
 
     @property
-    def _tlist(self):
-        return [self.__node_key, self.__version, self.__ep, self.__connected_since]
+    def version(self):
+        stringed = f"{self.__version}"
+        splited = [stringed[i:i+2] for i in range(0, len(stringed), 2)]
+        return f"{splited[0]}.{splited[1]}.{splited[2]}"
 
+    @property
+    def recived_bytes(self):
+        return self.__io_data['recive_bytes']
+
+    @property
+    def writed_bytes(self):
+        return self.__io_data['send_bytes']
 
 
 class KnownAddressRoute:
-    def __init__(self, pubkeyadr, route_known_since) -> None:
-        self.__route_known_since = route_known_since
-        self.__pubkeyadr = pubkeyadr
+    def __init__(self, pubkeyadr) -> None:
+        self.pubkeyadr = pubkeyadr
 
-    @property
-    def _tlist(self):
-        return [self.__pubkeyadr, self.__route_known_since]
+
+class LocalAddress:
+    def __init__(self, pubkeyadr) -> None:
+        self.pubkeyadr = pubkeyadr

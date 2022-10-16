@@ -4,87 +4,78 @@ import threading
 
 
 
-# Stellt alle Grundlegenden Funktionen für das senden sowie Empfangen bereit
-class _CoreSingleSocket:
-    # Konstruktor
+# Stellt alle Funktionen für das Senden und Empfangen auf Socket Ebende bereit -- Layer 3
+class _CoreDuplexSocket:
+    # Erzeugt ein neues Objekt
     def __init__(self, path) -> None:
         # Create a UDS socket
-        self.__sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.__thread = threading.Thread(target=self.___package_reader, args=(), daemon=True)
-        self.__finallyConnection = False
-        self.__cache = list()
+        self.__output_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
-        # Die Verbindung wird hergestellt
-        try: self.__sock.connect(path)
+        # Die ausgehende Verbindung wird aufgebaut
+        try: self.__output_socket.connect(path)
+        except Exception as E: print(E); return
+
+        # Der Gegenseite wird mitgeteilt ob es sich um einen neuen Vorgang handelt
+        try: self.__output_socket.sendall(cbor2.dumps({ "ver":221000, "lang":"py", "mode":"register_new_socket", "type":"out" }))
         except Exception as E: print(E); return
 
         # Es wird gewartet dass das HelloPackage empfangen wurde
-        try: core_hello_package = cbor2.loads(self.__sock.recv(8192))
+        try: core_hello_package = cbor2.loads(self.__output_socket.recv(8192))
         except Exception as E: print(E); return
 
-        # Speichert die Aktuelle SessionId sowie die Aktuelle Version der gegenseite ab
-        vatr = { "ver":10000000, "lang":"py", "pid":core_hello_package['pid'] }
+        # Speichert die Core Version ab
+        self.__core_version = core_hello_package['version']
 
-        # Speichert die Aktuelle ProzessID ab
-        self.__cpid = core_hello_package['pid']
+        # Die Zweite Socket Verbindung wird geöffnet, diese Verbindung wird verwendet um Eingehende Daten Entgegen zu nehmen
+        self.___input_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
-        # Der Reader Thread wird gestartet
-        self.__thread.start()
-
-        # Das Paket wird an die Gegenseite gesendet
-        try: self.__sock.send(cbor2.dumps(vatr))
+        # Die Eingehende Verbindung wird versucht zu öffnen
+        try: self.___input_socket.connect(path)
         except Exception as E: print(E); return
 
-    # Wird als Thread ausgeführt und nimmt eintreffende Pakete entgegen
-    def ___package_reader(self):
-        # Es wird geprüft ob der Vorgang bereits Initalisiert wurde
-        if self.__finallyConnection == False:
-            # Es wird auf die fertigstellungsantwort des Cores gewartet
-            try: frecp = self.__sock.recv(1)
-            except Exception as E: print(E); return
-            if frecp != b'd':
-                self.__sock.close()
-                raise Exception('INTERNAL_ERROR')
-            self.__finallyConnection = True
+        # Die Eingehende Verbindung wird der ausgehenden Verbindung hinzugefügt
+        try: self.___input_socket.sendall(cbor2.dumps({ "ver":221000, "lang":"py", "mode":"register_new_socket", "type":"in", "pid":core_hello_package['pid'], "isid":core_hello_package['isid'] }))
+        except Exception as E: print(E); return
 
-        # Die Schleife wird solange ausgeführt bis Daten eingetroffen sind
-        while True:
-            try:
-                # Es wird auf eintreffende Pakete gewartet
-                lastr = self.__sock.recv(8192)
-                if len(lastr) == 0: return
-                recd = cbor2.loads(lastr)
+        # Auf der Eingehenden Verbindung wird auf die bestätigung gewartet
+        try: inresolv = self.___input_socket.recv(1)
+        except Exception as E: print(E); return
+        if inresolv != b'd':
+            self.___input_socket.close()
+            self.__output_socket.close()
+            return
 
-                # Es wird geprüft ob es ein Paket für diese Sitzung gibt
-                del recd['pid']
-                self.__cache.append(recd)
+        # Die Verbindung ist einsatzbereit
+        return
 
-                # Es wird bestätigt dass das Paket empfangen wurde
-                self.__sock.send(cbor2.dumps({ "type":"response" }))
-            except Exception as E:
-                print(E)
+    # Wird verwendet um ein Paket an die gegenseite zu übermitteln
+    def write(self, data) -> None:
+        # Die Daten werden an den Ausgehenden Socket übergeben
+        self.__output_socket.sendall(cbor2.dumps({ "data":data }))
 
-    # Wird verwendet um einen Datensatz zu versenden
-    def _write(self, data):
-        # Es wird geprüft ob die Verbindung erfolgreich fertigestellt wurde
-        while self.__finallyConnection == False: time.sleep(1/1000)
+        # Es wird auf eine Bestätigung gewartet
+        if self.__output_socket.recv(1) != b"d": raise Exception('INTERNAL_PIPE_ERROR')
 
-        # Das Paket wird an die gegenseite gesendet
-        try: state = self.__sock.send(cbor2.dumps({ "pid":self.__cpid, **data }))
-        except Exception as E: raise E
-        return state
+        # Die Zeit die es gebraucht hat um die Daten zu übertragen wird zurückgegeben
+        return True, 0
 
-    # Wird verwendet um eine Sitzung zu löschen
-    def _delete_session(self, session_id):
-        if(session_id in self.__open_sessions) == True:
-            del self.__open_sessions[session_id]
+    # Wird verwendet um Eintreffende Daten entgegen zu nehemen, jedoch ohne eine bestätigung zu versenden
+    def read_wc(self):
+        # Es wird auf das Eintreffende Datenpaket der Gegenseite gewartet
+        recived_data = self.___input_socket.recv(8192)
 
-    # Wird verwendet um zu bestätigen dass das letzt Paket empfangen wurde, danach wird die Verbindung geschlossen
-    def _finally_and_close(self):
-        # Es wird bestätigt dass das Paket empfangen wurde
-        self.__sock.send(cbor2.dumps({ "type":"response" }))
+        # Die Empfangenen Daten werden zurückgegeben
+        return recived_data
 
-    # Gibt eingetorffene Pakete aus
-    def _read(self):
-        while len(self.__cache) == 0: time.sleep(1/1000)
-        return self.__cache.pop(0)
+    # Signalisiert der Gegenseite dass das Paket erfolreich Empfangen wurde
+    def signal_recived(self):
+        # Der Gegenseite wird der Empfang der Daten bestätigt
+        self.___input_socket.send(b"d")
+
+    # Wird verwendet um den Socket Ordentlich zu schließen
+    def close_confirmed(self):
+        return
+
+    @property
+    def core_version(self):
+        return self.__core_version

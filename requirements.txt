@@ -1,2 +1,2 @@
 cbor2==5.4.3
-texttable==1.6.4
+setuptools==65.3.0
