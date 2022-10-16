@@ -201,6 +201,8 @@ class CoreAPI:
         if(requestTypes in [PostRequestTypes.GET_ALL_CONNECTED_NODES, PostRequestTypes.GET_ALL_KNOWN_ROUTES, PostRequestTypes.GET_ALL_LOCAL_ADDRESSES]) != True:
             raise Exception('UNKOWN_REQUEST')
 
+        # Es wird eine Anfrage an den Dienst gestellt um einen neuen POST Vorgang zu Initlaisieren
+
         # Es wird eine neue Prozess ID erzeugt
         procId = str(uuid.uuid4())
 
@@ -216,9 +218,6 @@ class CoreAPI:
 
         # Der Request vorgang wird Zwischengespeichert
         self.___open_processes[procId] = enterup_data
-
-        # Es wird geprüft ob das Paket die Mindestgröße überschritten wurde, wenn ja wird das Paket in mehrere Unter Pakete aufgeteilt und übertragen
-
 
         # Das Paket wird an die Gegenseite übermittelt
         self.___core_socket.write(request_package)
