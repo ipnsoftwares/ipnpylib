@@ -12,6 +12,7 @@ setup(
     url='https://github.com/fluffelpuff/ipnpylib',
     keywords='example project',
     install_requires=[
+        'cbor2',
     ],
 
 )
