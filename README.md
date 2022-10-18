@@ -1,4 +1,7 @@
 # 🌍 **Interplanetary Network (IPN) -- Python Library** 🐍
+
+### ⚠️No guarantee, no liability, the project is still under construction.⚠️
+
 This library provides all IPN core functionality within a Python project. This library requires the IPN core service on the same device where the library will be used. The Python API does not provide FullNode functions for the IPN!
 
 
